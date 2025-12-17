@@ -4,18 +4,17 @@ const fs = require('fs');
 async function generateMoroccoWindData() {
   console.log("🏭 المصنع يعمل: جاري تصنيع شبكة الرياح للمغرب...");
 
-  // 1. إعدادات الشبكة (تغطي المغرب والمحيط)
-  const latStart = 20.0; // جنوباً (الكويرة)
-  const latEnd = 37.0;   // شمالاً (طنجة/المتوسط)
-  const lonStart = -20.0; // غرباً (المحيط)
-  const lonEnd = -1.0;    // شرقاً (الحدود)
-  const resolution = 1.0; // دقة الشبكة (كل 1 درجة) - يمكن تصغيرها لدقة أعلى لكن ستثقل الطلب
+  // إعدادات الشبكة (تغطي المغرب)
+  const latStart = 20.0; 
+  const latEnd = 37.0;   
+  const lonStart = -20.0; 
+  const lonEnd = -1.0;    
+  const resolution = 1.0; 
 
-  // توليد نقاط الإحداثيات
   let lats = [];
   let lons = [];
   
-  // البناء العكسي (من الشمال للجنوب) كما تتطلب ملفات GRIB عادة
+  // توليد النقاط
   for (let lat = latEnd; lat >= latStart; lat -= resolution) {
     for (let lon = lonStart; lon <= lonEnd; lon += resolution) {
       lats.push(lat);
@@ -23,42 +22,41 @@ async function generateMoroccoWindData() {
     }
   }
 
-  console.log(`📊 تم تحديد ${lats.length} نقطة رصد جوي.`);
+  console.log(`📊 تم تحديد ${lats.length} نقطة رصد.`);
 
   try {
-    // 2. طلب البيانات الحية من Open-Meteo (موديل GFS العالمي)
-    // نرسل القوائم دفعة واحدة
+    // === التغيير الجوهري هنا ===
+    // نطلب hourly بدلاً من current لتجنب خطأ 400
     const url = "https://api.open-meteo.com/v1/forecast";
     const params = {
       latitude: lats.join(','),
       longitude: lons.join(','),
-      current: "u_component_10m,v_component_10m",
+      hourly: "u_component_10m,v_component_10m", // طلبنا الساعات
+      forecast_days: 1, // نحتاج يوماً واحداً فقط
       windspeed_unit: "kmh",
-      models: "gfs_seamless" // أو icon_seamless لدقة أعلى
+      models: "gfs_seamless"
     };
 
-    console.log("📡 الاتصال بالأقمار الصناعية (Open-Meteo)...");
+    console.log("📡 الاتصال بالأقمار الصناعية...");
     const response = await axios.get(url, { params });
     const data = response.data;
 
-    // 3. تحويل البيانات إلى صيغة تفهمها leaflet-velocity
-    // الصيغة تتطلب مصفوفتين: واحدة لمركبة U (شرق-غرب) وواحدة لمركبة V (شمال-جنوب)
     let uData = [];
     let vData = [];
 
-    // Open-Meteo يعيد مصفوفة من الكائنات إذا طلبنا نقاط متعددة
+    // معالجة البيانات (نأخذ الاندكس 0 وهو الساعة الحالية)
     if (Array.isArray(data)) {
         data.forEach(point => {
-            uData.push(point.current.u_component_10m);
-            vData.push(point.current.v_component_10m);
+            // نأخذ القيمة الأولى [0] من مصفوفة الساعات
+            uData.push(point.hourly.u_component_10m[0]);
+            vData.push(point.hourly.v_component_10m[0]);
         });
     } else {
-        // حالة نادرة (نقطة واحدة)
-        uData.push(data.current.u_component_10m);
-        vData.push(data.current.v_component_10m);
+        uData.push(data.hourly.u_component_10m[0]);
+        vData.push(data.hourly.v_component_10m[0]);
     }
 
-    // بناء الهيكلة النهائية (Header + Data)
+    // بناء الملف النهائي
     const nx = Math.round((lonEnd - lonStart) / resolution) + 1;
     const ny = Math.round((latEnd - latStart) / resolution) + 1;
 
@@ -93,15 +91,15 @@ async function generateMoroccoWindData() {
       }
     ];
 
-    console.log("✅ تم معالجة البيانات بنجاح.");
-    
-    // 4. الحفظ
+    console.log("✅ البيانات جاهزة.");
     fs.writeFileSync('weather_output.json', JSON.stringify(finalJson));
-    console.log("🚀 تم حفظ ملف الرياح المغربي: weather_output.json");
+    console.log("🚀 تم الحفظ: weather_output.json");
 
   } catch (error) {
     console.error("❌ خطأ:", error.message);
-    if(error.response) console.error(error.response.data);
+    if(error.response) {
+        console.error("تفاصيل الخطأ:", JSON.stringify(error.response.data, null, 2));
+    }
     process.exit(1);
   }
 }
