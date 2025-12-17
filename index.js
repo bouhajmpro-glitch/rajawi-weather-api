@@ -2,14 +2,14 @@ const axios = require('axios');
 const fs = require('fs');
 
 async function generateMoroccoWindData() {
-  console.log("🏭 المصنع يعمل: جاري تصنيع شبكة الرياح للمغرب (وضع الآمان)...");
+  console.log("🏭 المصنع يعمل: جاري تصنيع شبكة الرياح (وضع الحساب الرياضي)...");
 
-  // تقليل الدقة قليلاً لتفادي رفض السيرفر (Resolution 2.0)
+  // إعدادات الشبكة (دقة متوسطة لضمان السرعة)
   const latStart = 20.0; 
   const latEnd = 36.0;   
   const lonStart = -18.0; 
   const lonEnd = -1.0;    
-  const resolution = 2.0; // كل نقطتين درجة واحدة (أخف على السيرفر)
+  const resolution = 2.0; 
 
   let lats = [];
   let lons = [];
@@ -22,39 +22,55 @@ async function generateMoroccoWindData() {
     }
   }
 
-  console.log(`📊 تم تقليص الشبكة إلى ${lats.length} نقطة لضمان القبول.`);
+  console.log(`📊 عدد نقاط الرصد: ${lats.length}`);
 
   try {
     const url = "https://api.open-meteo.com/v1/forecast";
+    
+    // التغيير الذكي: نطلب السرعة والاتجاه بدلاً من المركبات التي تسبب الخطأ
     const params = {
       latitude: lats.join(','),
       longitude: lons.join(','),
-      hourly: "u_component_10m,v_component_10m", // نطلب البيانات الساعية
+      hourly: "windspeed_10m,winddirection_10m", // هذه المتغيرات لا تفشل أبداً
       forecast_days: 1,
       windspeed_unit: "kmh"
-      // قمنا بحذف 'models' لنترك للنظام حرية اختيار الأفضل وتجنب الخطأ
     };
 
-    console.log("📡 الاتصال بالأقمار الصناعية...");
+    console.log("📡 الاتصال بالأقمار الصناعية (طلب البيانات الأساسية)...");
     const response = await axios.get(url, { params });
     const data = response.data;
 
     let uData = [];
     let vData = [];
 
+    // الدالة الرياضية لتحويل السرعة والاتجاه إلى U و V
+    // U = -speed * sin(direction)
+    // V = -speed * cos(direction)
+    const calculateUV = (speed, dir) => {
+        const rad = dir * (Math.PI / 180);
+        const u = -speed * Math.sin(rad);
+        const v = -speed * Math.cos(rad);
+        return { u, v };
+    };
+
     // معالجة البيانات
+    const processPoint = (point) => {
+        // نأخذ الساعة الحالية (index 0)
+        const speed = point.hourly.windspeed_10m[0];
+        const dir = point.hourly.winddirection_10m[0];
+        
+        const { u, v } = calculateUV(speed, dir);
+        uData.push(u);
+        vData.push(v);
+    };
+
     if (Array.isArray(data)) {
-        data.forEach(point => {
-            // نأخذ الساعة الحالية (index 0)
-            uData.push(point.hourly.u_component_10m[0]);
-            vData.push(point.hourly.v_component_10m[0]);
-        });
+        data.forEach(processPoint);
     } else {
-        uData.push(data.hourly.u_component_10m[0]);
-        vData.push(data.hourly.v_component_10m[0]);
+        processPoint(data);
     }
 
-    // بناء ملف JSON النهائي المتوافق مع الخريطة
+    // بناء ملف JSON النهائي
     const nx = Math.round((lonEnd - lonStart) / resolution) + 1;
     const ny = Math.round((latEnd - latStart) / resolution) + 1;
 
@@ -89,14 +105,15 @@ async function generateMoroccoWindData() {
       }
     ];
 
-    console.log("✅ البيانات جاهزة ومعالجة.");
+    console.log("✅ تمت العمليات الحسابية بنجاح.");
     fs.writeFileSync('weather_output.json', JSON.stringify(finalJson));
-    console.log("🚀 تم حفظ الملف بنجاح: weather_output.json");
+    console.log("🚀 تم حفظ الملف: weather_output.json");
 
   } catch (error) {
     console.error("❌ خطأ:", error.message);
     if(error.response) {
-        console.error("تفاصيل الخطأ:", JSON.stringify(error.response.data, null, 2));
+        // طباعة جزء صغير من الخطأ لتجنب ملء الشاشة
+        console.error("تفاصيل:", JSON.stringify(error.response.data).substring(0, 200));
     }
     process.exit(1);
   }
