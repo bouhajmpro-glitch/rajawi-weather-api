@@ -1,0 +1,33 @@
+name: Rajawi Weather Factory 🏭
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # يعمل كل 6 ساعات
+  workflow_dispatch: # يسمح لك بتشغيله يدوياً بضغطة زر
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Install Dependencies
+      run: npm install
+
+    - name: Run The Factory (Harvest Data) 🚜
+      run: node index.js
+
+    - name: Commit and Push Data 🚀
+      run: |
+        git config --global user.name 'Rajawi Bot'
+        git config --global user.email 'bot@rajawi.weather'
+        git add weather_output.json
+        git commit -m "🌪️ Update Wind Data: $(date)" || exit 0
+        git push
