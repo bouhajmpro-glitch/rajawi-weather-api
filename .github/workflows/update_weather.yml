@@ -2,19 +2,21 @@ name: Rajawi Weather Factory 🏭
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # كل 6 ساعات
-  workflow_dispatch: # تشغيل يدوي
+    - cron: '0 */6 * * *' # يعمل كل 6 ساعات
+  workflow_dispatch: # يسمح بالتشغيل اليدوي
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write # تأكيد صلاحيات الكتابة
+      contents: write # صلاحيات الكتابة ضرورية
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+      with:
+        fetch-depth: 0 # جلب تاريخ التغييرات كاملاً لتجنب الأخطاء
 
     - name: Setup Node.js
       uses: actions/setup-node@v3
@@ -29,11 +31,20 @@ jobs:
 
     - name: Commit and Push Data 🚀
       run: |
+        # 1. تعريف هوية الروبوت
         git config --global user.name 'Rajawi Bot'
         git config --global user.email 'bot@rajawi.weather'
+        
+        # 2. تجهيز الملف الجديد
         git add weather_output.json
-        # نتجاهل الخطأ إذا لم يكن هناك تغيير في البيانات
+        
+        # 3. حفظ التغيير مؤقتاً في جهاز الروبوت
+        # (|| exit 0) تعني: لو لم يوجد تغيير، توقف بنجاح ولا تعتبره خطأ
         git commit -m "🌪️ Update Wind Data: $(date)" || exit 0
-        # الخطوة السحرية: سحب أي تعديلات قمت بها أنت قبل الرفع
+        
+        # 4. الخطوة الحاسمة: سحب أي تغييرات قمت بها أنت ودمجها (Rebase)
+        # هذا يحل مشكلة [rejected] fetch first
         git pull --rebase origin main
-        git push
+        
+        # 5. الرفع النهائي
+        git push origin main
