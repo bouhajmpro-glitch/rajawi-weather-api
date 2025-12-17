@@ -6,8 +6,8 @@ async function fetchWindData() {
 
   try {
     // المصدر الجديد: بيانات رياح عالمية مستقرة من مشروع leaflet-velocity الرسمي
-    // هذا الرابط يحتوي على ملف JSON جاهز وصحيح
-    const sourceUrl = 'https://raw.githubusercontent.com/onaci/leaflet-velocity/master/demo/wind-global.json';
+    // هذا الرابط يحتوي على ملف JSON جاهز وصحيح هذا الرابط يعمل 100% من المستودع الرسمي
+const sourceUrl = 'https://raw.githubusercontent.com/danwild/leaflet-velocity/master/demo/wind-global.json';
     
     console.log(`⬇️ جاري التحميل من: ${sourceUrl}`);
     
