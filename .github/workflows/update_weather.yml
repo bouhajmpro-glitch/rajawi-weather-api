@@ -2,12 +2,15 @@ name: Rajawi Weather Factory 🏭
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # يعمل كل 6 ساعات
-  workflow_dispatch: # يسمح لك بتشغيله يدوياً بضغطة زر
+    - cron: '0 */6 * * *' # كل 6 ساعات
+  workflow_dispatch: # تشغيل يدوي
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # تأكيد صلاحيات الكتابة
 
     steps:
     - name: Checkout code
@@ -29,5 +32,8 @@ jobs:
         git config --global user.name 'Rajawi Bot'
         git config --global user.email 'bot@rajawi.weather'
         git add weather_output.json
+        # نتجاهل الخطأ إذا لم يكن هناك تغيير في البيانات
         git commit -m "🌪️ Update Wind Data: $(date)" || exit 0
+        # الخطوة السحرية: سحب أي تعديلات قمت بها أنت قبل الرفع
+        git pull --rebase origin main
         git push
