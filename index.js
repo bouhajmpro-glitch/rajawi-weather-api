@@ -2,9 +2,9 @@ const axios = require('axios');
 const fs = require('fs');
 
 async function generateMoroccoWindData() {
-  console.log("🏭 المصنع يعمل: جاري تصنيع شبكة الرياح (وضع الحساب الرياضي)...");
+  console.log("🏭 المصنع يعمل: جاري تصنيع شبكة الرياح (إصلاح الهيكلة)...");
 
-  // إعدادات الشبكة (دقة متوسطة لضمان السرعة)
+  // إعدادات الشبكة
   const latStart = 20.0; 
   const latEnd = 36.0;   
   const lonStart = -18.0; 
@@ -14,7 +14,7 @@ async function generateMoroccoWindData() {
   let lats = [];
   let lons = [];
   
-  // توليد نقاط الشبكة
+  // توليد نقاط الشبكة (من الشمال للجنوب، ومن الغرب للشرق)
   for (let lat = latEnd; lat >= latStart; lat -= resolution) {
     for (let lon = lonStart; lon <= lonEnd; lon += resolution) {
       lats.push(lat);
@@ -27,38 +27,36 @@ async function generateMoroccoWindData() {
   try {
     const url = "https://api.open-meteo.com/v1/forecast";
     
-    // التغيير الذكي: نطلب السرعة والاتجاه بدلاً من المركبات التي تسبب الخطأ
+    // نطلب السرعة والاتجاه (الحل الرياضي الآمن)
     const params = {
       latitude: lats.join(','),
       longitude: lons.join(','),
-      hourly: "windspeed_10m,winddirection_10m", // هذه المتغيرات لا تفشل أبداً
+      hourly: "windspeed_10m,winddirection_10m",
       forecast_days: 1,
-      windspeed_unit: "kmh"
+      windspeed_unit: "kmh" // تأكد أن الوحدة متوافقة
     };
 
-    console.log("📡 الاتصال بالأقمار الصناعية (طلب البيانات الأساسية)...");
+    console.log("📡 الاتصال بالأقمار الصناعية...");
     const response = await axios.get(url, { params });
     const data = response.data;
 
     let uData = [];
     let vData = [];
 
-    // الدالة الرياضية لتحويل السرعة والاتجاه إلى U و V
-    // U = -speed * sin(direction)
-    // V = -speed * cos(direction)
+    // معادلة التحويل
     const calculateUV = (speed, dir) => {
+        // تحويل الاتجاه من درجات إلى راديان
         const rad = dir * (Math.PI / 180);
+        // المعادلات القياسية للأرصاد الجوية
         const u = -speed * Math.sin(rad);
         const v = -speed * Math.cos(rad);
         return { u, v };
     };
 
-    // معالجة البيانات
     const processPoint = (point) => {
         // نأخذ الساعة الحالية (index 0)
         const speed = point.hourly.windspeed_10m[0];
         const dir = point.hourly.winddirection_10m[0];
-        
         const { u, v } = calculateUV(speed, dir);
         uData.push(u);
         vData.push(v);
@@ -70,18 +68,20 @@ async function generateMoroccoWindData() {
         processPoint(data);
     }
 
-    // بناء ملف JSON النهائي
     const nx = Math.round((lonEnd - lonStart) / resolution) + 1;
     const ny = Math.round((latEnd - latStart) / resolution) + 1;
 
+    // === التصحيح الجوهري هنا ===
+    // إضافة parameterCategory: 2 لكي تتعرف المكتبة على البيانات
     const finalJson = [
       {
         "header": {
           "parameterUnit": "m/s",
-          "parameterNumber": 2,
+          "parameterCategory": 2, // <--- هام جداً: تصنيف "زخم"
+          "parameterNumber": 2,   // رقم 2 يعني U-component
           "parameterNumberName": "Eastward current",
-          "la1": latEnd,
-          "lo1": lonStart,
+          "la1": latEnd,   // خط العرض الشمالي (البداية)
+          "lo1": lonStart, // خط الطول الغربي (البداية)
           "nx": nx,
           "ny": ny,
           "dx": resolution,
@@ -92,7 +92,8 @@ async function generateMoroccoWindData() {
       {
         "header": {
           "parameterUnit": "m/s",
-          "parameterNumber": 3,
+          "parameterCategory": 2, // <--- هام جداً
+          "parameterNumber": 3,   // رقم 3 يعني V-component
           "parameterNumberName": "Northward current",
           "la1": latEnd,
           "lo1": lonStart,
@@ -105,16 +106,12 @@ async function generateMoroccoWindData() {
       }
     ];
 
-    console.log("✅ تمت العمليات الحسابية بنجاح.");
+    console.log("✅ البيانات جاهزة بالهيكلة الصحيحة.");
     fs.writeFileSync('weather_output.json', JSON.stringify(finalJson));
     console.log("🚀 تم حفظ الملف: weather_output.json");
 
   } catch (error) {
     console.error("❌ خطأ:", error.message);
-    if(error.response) {
-        // طباعة جزء صغير من الخطأ لتجنب ملء الشاشة
-        console.error("تفاصيل:", JSON.stringify(error.response.data).substring(0, 200));
-    }
     process.exit(1);
   }
 }
